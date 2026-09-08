@@ -9,6 +9,14 @@ minor contour and simplification errors do not reveal cracks.
 > ラスタ画像を watertight な面分割へ復元するのではなく、奥から手前への
 > 重ね描画によって SVG として近似する PoC です。
 
+> [!IMPORTANT]
+> **Inspiration / Special Thanks**
+>
+> LayerTrace was inspired by Masaki Ozeki's
+> **[ozekimasaki/raster-to-vector](https://github.com/ozekimasaki/raster-to-vector)**.
+> このプロジェクトを始める着想を与えてくれた、重要なインスパイア元です。
+> Please visit the original repository as well.
+
 The current target is anime/illustration artwork with opaque flat colors or
 cel-style shading and a modest palette. Photographs, transparency, gradients,
 textures, semantic understanding, shared-edge reconstruction, topology solvers,
