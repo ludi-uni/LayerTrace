@@ -25,6 +25,7 @@ class TraceConfig:
     curve_fit: str = "off"
     curve_error: float = 1.0
     path_batching: str = "off"
+    batch_safety_margin: float = 1.0
 
 
 def _render_svg(
@@ -83,6 +84,7 @@ def _write_variant(
     curve_fit: str,
     curve_error: float,
     path_batching: str,
+    batch_safety_margin: float,
 ) -> dict[str, object]:
     output_dir.mkdir(parents=True, exist_ok=True)
     height, width = labels.shape
@@ -99,6 +101,7 @@ def _write_variant(
         curve_fit=curve_fit,
         curve_error=curve_error,
         path_batching=path_batching,
+        batch_safety_margin=batch_safety_margin,
     )
     svg_generation_ms = (perf_counter() - generation_started) * 1000.0
     raster_started = perf_counter()
@@ -170,6 +173,7 @@ def trace_image(
         config.curve_fit,
         config.curve_error,
         config.path_batching,
+        config.batch_safety_margin,
     )
     comparison_root = output_dir / "comparisons"
     positive = config.underlap if config.underlap > 0 else 2
@@ -189,6 +193,7 @@ def trace_image(
                 config.curve_fit,
                 config.curve_error,
                 config.path_batching,
+                config.batch_safety_margin,
             )
     manifest = {
         "config": asdict(config),

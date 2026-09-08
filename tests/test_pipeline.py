@@ -262,6 +262,7 @@ def test_consecutive_same_style_batching_is_pixel_identical(tmp_path: Path):
             simplify=1.0,
             min_area=1,
             path_batching="consecutive",
+            batch_safety_margin=1.0,
         ),
         include_comparisons=False,
     )["metrics"]
@@ -328,8 +329,40 @@ def test_batch_safety_margin_crosses_spatial_bucket_boundaries(tmp_path: Path):
             simplify=1.0,
             min_area=1,
             path_batching="consecutive",
+            batch_safety_margin=1.0,
         ),
         include_comparisons=False,
     )["metrics"]
     assert metrics["region_count"] == 4
     assert metrics["svg_element_count"] == 3
+
+
+def test_batch_safety_margin_is_configurable_and_monotonic(tmp_path: Path):
+    assert TraceConfig().batch_safety_margin == 1.0
+    source = _save(
+        tmp_path,
+        "margin.png",
+        lambda draw: tuple(
+            draw.rectangle((x, 18, x + 4, 22), fill="#cc3355")
+            for x in (4, 11, 19, 30)
+        ),
+        size=(40, 36),
+    )
+    path_counts = []
+    for margin in (0.0, 0.5, 1.0, 2.0):
+        metrics = trace_image(
+            source,
+            tmp_path / f"margin-{margin}",
+            TraceConfig(
+                colors=2,
+                underlap=1,
+                simplify=1.0,
+                min_area=1,
+                path_batching="consecutive",
+                batch_safety_margin=margin,
+            ),
+            include_comparisons=False,
+        )["metrics"]
+        assert metrics["batch_safety_margin"] == margin
+        path_counts.append(metrics["svg_element_count"])
+    assert path_counts == sorted(path_counts)

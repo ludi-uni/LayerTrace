@@ -26,6 +26,7 @@ def _config(path_batching: str) -> TraceConfig:
         curve_fit="cubic",
         curve_error=1.0,
         path_batching=path_batching,
+        batch_safety_margin=1.0,
     )
 
 

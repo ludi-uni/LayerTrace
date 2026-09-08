@@ -27,14 +27,29 @@ def build_parser() -> argparse.ArgumentParser:
         default="off",
         help="batch consecutive same-style non-overlapping regions",
     )
+    parser.add_argument(
+        "--batch-safety-margin",
+        type=float,
+        default=1.0,
+        help="non-overlap safety margin for compound path batching",
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.underlap < 0 or args.simplify < 0 or args.min_area < 1 or args.curve_error <= 0:
-        raise SystemExit("underlap/simplify must be non-negative; min-area/curve-error must be positive")
+    if (
+        args.underlap < 0
+        or args.simplify < 0
+        or args.min_area < 1
+        or args.curve_error <= 0
+        or args.batch_safety_margin < 0
+    ):
+        raise SystemExit(
+            "underlap/simplify/batch-safety-margin must be non-negative; "
+            "min-area/curve-error must be positive"
+        )
     report = trace_image(
         args.input,
         args.output,
@@ -48,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             curve_fit=args.curve_fit,
             curve_error=args.curve_error,
             path_batching=args.path_batching,
+            batch_safety_margin=args.batch_safety_margin,
         ),
     )
     print(json.dumps(report["metrics"], indent=2))

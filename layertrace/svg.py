@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from html import escape
+import math
 from pathlib import Path
 
 import cv2
@@ -34,36 +35,45 @@ class _PaintShape:
 @dataclass
 class _Batch:
     style: StyleKey
+    safety_margin: float
     shapes: list[_PaintShape] = field(default_factory=list)
     occupied: dict[tuple[int, int], list[tuple[int, int, int, int]]] = field(default_factory=dict)
 
     def can_add(self, shape: _PaintShape) -> bool:
         if self.style != shape.style:
             return False
-        for cell in _bbox_cells(shape.bbox):
-            if any(_boxes_intersect(shape.bbox, existing) for existing in self.occupied.get(cell, [])):
+        for cell in _bbox_cells(shape.bbox, margin=self.safety_margin):
+            if any(
+                _boxes_intersect(shape.bbox, existing, self.safety_margin)
+                for existing in self.occupied.get(cell, [])
+            ):
                 return False
         return True
 
     def add(self, shape: _PaintShape) -> None:
         self.shapes.append(shape)
-        for cell in _bbox_cells(shape.bbox):
+        for cell in _bbox_cells(shape.bbox, margin=self.safety_margin):
             self.occupied.setdefault(cell, []).append(shape.bbox)
 
 
 def _bbox_cells(
-    bbox: tuple[int, int, int, int], cell_size: int = 32, margin: int = 1
+    bbox: tuple[int, int, int, int], cell_size: int = 32, margin: float = 1.0
 ):
     x0, y0, x1, y1 = bbox
-    for cell_y in range((y0 - margin) // cell_size, (y1 + margin) // cell_size + 1):
-        for cell_x in range((x0 - margin) // cell_size, (x1 + margin) // cell_size + 1):
+    first_y = math.floor((y0 - margin) / cell_size)
+    last_y = math.floor((y1 + margin) / cell_size)
+    first_x = math.floor((x0 - margin) / cell_size)
+    last_x = math.floor((x1 + margin) / cell_size)
+    for cell_y in range(first_y, last_y + 1):
+        for cell_x in range(first_x, last_x + 1):
             yield cell_x, cell_y
 
 
 def _boxes_intersect(
-    left: tuple[int, int, int, int], right: tuple[int, int, int, int]
+    left: tuple[int, int, int, int],
+    right: tuple[int, int, int, int],
+    margin: float,
 ) -> bool:
-    margin = 1
     return not (
         left[2] + margin < right[0] - margin
         or right[2] + margin < left[0] - margin
@@ -78,13 +88,17 @@ def _paint_bbox(mask: np.ndarray, offset: tuple[int, int]) -> tuple[int, int, in
     return x0, y0, x0 + width - 1, y0 + height - 1
 
 
-def _batch_shapes(shapes: list[_PaintShape], mode: str) -> list[_Batch]:
+def _batch_shapes(
+    shapes: list[_PaintShape], mode: str, safety_margin: float
+) -> list[_Batch]:
     if mode not in {"off", "consecutive"}:
         raise ValueError(f"unknown path batching mode: {mode}")
+    if not math.isfinite(safety_margin) or safety_margin < 0:
+        raise ValueError("batch safety margin must be finite and non-negative")
     batches: list[_Batch] = []
     for shape in shapes:
         if mode == "off" or not batches or not batches[-1].can_add(shape):
-            batches.append(_Batch(shape.style))
+            batches.append(_Batch(shape.style, safety_margin))
         batches[-1].add(shape)
     return batches
 
@@ -160,6 +174,7 @@ def write_svg(
     curve_fit: str = "off",
     curve_error: float = 1.0,
     path_batching: str = "off",
+    batch_safety_margin: float = 1.0,
 ) -> dict[str, object]:
     shapes: list[_PaintShape] = []
     total_vertices = 0
@@ -196,7 +211,7 @@ def write_svg(
         total_moves += path_stats.move_commands
         total_closes += path_stats.close_commands
         total_contours += contour_count
-    batches = _batch_shapes(shapes, path_batching)
+    batches = _batch_shapes(shapes, path_batching, batch_safety_margin)
     elements: list[str] = []
     for batch_index, batch in enumerate(batches, start=1):
         region_count = len(batch.shapes)
@@ -242,6 +257,7 @@ def write_svg(
             key: distribution.get(key, 0) for key in ("1", "2-4", "5-16", "17-64", "65+")
         },
         "max_batch_size": max((len(batch.shapes) for batch in batches), default=0),
+        "batch_safety_margin": float(batch_safety_margin),
         "total_vertices": total_vertices,
         "total_path_commands": total_lines + total_cubics + total_moves + total_closes,
         "line_command_count": total_lines,
